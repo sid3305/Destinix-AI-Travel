@@ -9,28 +9,101 @@ datasource db {
   provider  = "postgresql"
 }
 
+model User {
+  id        String    @id @default(cuid())
+  email     String    @unique
+  firstName String
+  lastName  String
+  phone     String?
+  address   String?
+  city      String?
+  zipCode   String?
+  avatarUrl String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  bookings  Booking[]
+  reviews   Review[]
+}
+
+model TravelPackage {
+  id          String    @id @default(cuid())
+  slug        String    @unique
+  title       String
+  destination String
+  price       Float
+  currency    String
+  duration    String
+  image       String?
+  type        String
+  description String?
+  
+  bookings    Booking[]
+  reviews     Review[]
+}
+
 model Booking {
   id              String   @id @default(cuid())
-  firstName       String
-  lastName        String
-  email           String
-  phone           String?
-  address         String?
-  city            String?
-  zipCode         String?
+  userId          String
   packageId       String
-  packageTitle    String
-  packageImage    String?
   totalAmount     Float
   currency        String
-  flight          Json?
-  hotel           Json?
-  addons          Json?
-  pricing         Json?
   numTravelers    Int
   selectedVehicle String?
   status          String   @default("Pending")
   paymentId       String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+  
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  package         TravelPackage @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  
+  flight          BookingFlight?
+  hotel           BookingHotel?
+  addons          BookingAddon[]
+}
+
+model BookingFlight {
+  id            String    @id @default(cuid())
+  bookingId     String    @unique
+  airline       String
+  flightNumber  String
+  departureTime DateTime?
+  arrivalTime   DateTime?
+  price         Float
+  
+  booking       Booking   @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+}
+
+model BookingHotel {
+  id        String    @id @default(cuid())
+  bookingId String    @unique
+  hotelName String
+  checkIn   DateTime?
+  checkOut  DateTime?
+  roomType  String?
+  price     Float
+
+  booking   Booking   @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+}
+
+model BookingAddon {
+  id        String  @id @default(cuid())
+  bookingId String
+  addonName String
+  price     Float
+
+  booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+}
+
+model Review {
+  id        String   @id @default(cuid())
+  packageId String
+  userId    String
+  rating    Int
+  comment   String?
+  createdAt DateTime @default(now())
+
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  package   TravelPackage @relation(fields: [packageId], references: [id], onDelete: Cascade)
 }

@@ -7,11 +7,16 @@ import fs from "fs";
 import path from "path";
 import dotenv from "dotenv";
 import nodemailer from "nodemailer";
+import { Pool } from "pg";
+import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@prisma/client";
 
-const prisma = new PrismaClient();
-
 dotenv.config();
+
+const connectionString = `${process.env.DATABASE_URL}`;
+const pool = new Pool({ connectionString });
+const adapter = new PrismaPg(pool);
+const prisma = new PrismaClient({ adapter });
 
 const app = express();
 const PORT = 3000;
@@ -62,27 +67,60 @@ app.post("/api/bookings", async (req, res) => {
   }
   
   try {
-    const newBooking = await prisma.booking.create({
-      data: {
+    const user = await prisma.user.upsert({
+      where: { email: bookingData.email },
+      update: {
         firstName: bookingData.firstName,
         lastName: bookingData.lastName,
-        email: bookingData.email,
         phone: bookingData.phone,
         address: bookingData.address,
         city: bookingData.city,
         zipCode: bookingData.zipCode,
+      },
+      create: {
+        email: bookingData.email,
+        firstName: bookingData.firstName,
+        lastName: bookingData.lastName,
+        phone: bookingData.phone,
+        address: bookingData.address,
+        city: bookingData.city,
+        zipCode: bookingData.zipCode,
+      }
+    });
+
+    const newBooking = await prisma.booking.create({
+      data: {
+        userId: user.id,
         packageId: bookingData.packageId,
-        packageTitle: bookingData.packageTitle,
-        packageImage: bookingData.packageImage,
-        totalAmount: bookingData.totalAmount,
-        currency: bookingData.currency,
-        flight: bookingData.flight || null,
-        hotel: bookingData.hotel || null,
-        addons: bookingData.addons || null,
-        pricing: bookingData.pricing || null,
-        numTravelers: bookingData.numTravelers,
+        totalAmount: bookingData.totalAmount || 0,
+        currency: bookingData.currency || 'INR',
+        numTravelers: bookingData.numTravelers || 1,
         selectedVehicle: bookingData.selectedVehicle,
-        status: 'Pending'
+        status: 'Pending',
+        flight: bookingData.flight ? {
+          create: {
+            airline: bookingData.flight.airline || "TBD",
+            flightNumber: bookingData.flight.flightNumber || "TBD",
+            price: bookingData.flight.price || 0,
+            departureTime: bookingData.flight.departureDate ? new Date(bookingData.flight.departureDate) : null,
+            arrivalTime: bookingData.flight.returnDate ? new Date(bookingData.flight.returnDate) : null,
+          }
+        } : undefined,
+        hotel: bookingData.hotel ? {
+          create: {
+            hotelName: bookingData.hotel.name || "TBD",
+            price: bookingData.hotel.price || 0,
+            roomType: bookingData.hotel.roomType || null,
+            checkIn: bookingData.hotel.checkIn ? new Date(bookingData.hotel.checkIn) : null,
+            checkOut: bookingData.hotel.checkOut ? new Date(bookingData.hotel.checkOut) : null,
+          }
+        } : undefined,
+        addons: bookingData.addons && Array.isArray(bookingData.addons) ? {
+          create: bookingData.addons.map((a: any) => ({
+            addonName: typeof a === 'string' ? a : (a.name || "Unknown Addon"),
+            price: typeof a === 'string' ? 0 : (a.price || 0)
+          }))
+        } : undefined,
       }
     });
     res.json({ success: true, message: "Booking details saved successfully", bookingId: newBooking.id });
@@ -200,10 +238,28 @@ app.get("/api/my-bookings", async (req, res) => {
 
   try {
     const userBookings = await prisma.booking.findMany({
-      where: { email: { equals: email as string, mode: 'insensitive' } }
+      where: { user: { email: { equals: email as string, mode: 'insensitive' } } },
+      include: {
+        user: true,
+        package: true,
+        flight: true,
+        hotel: true,
+        addons: true
+      }
     });
-    res.json(userBookings);
+
+    const mappedBookings = userBookings.map(b => ({
+      ...b,
+      email: b.user.email,
+      firstName: b.user.firstName,
+      lastName: b.user.lastName,
+      packageTitle: b.package.title,
+      packageImage: b.package.image
+    }));
+    
+    res.json(mappedBookings);
   } catch (error: any) {
+    console.error(error);
     res.status(500).json({ error: "Failed to fetch bookings" });
   }
 });

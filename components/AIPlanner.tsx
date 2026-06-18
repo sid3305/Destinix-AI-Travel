@@ -2,6 +2,8 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
+import { useSearchParams } from 'react-router-dom';
+import ShareModal from './ShareModal';
 import { 
   Sparkles, MapPin, Calendar, Wallet, Clock, 
   ChevronDown, ChevronUp, Star, Coffee, Utensils, 
@@ -38,6 +40,8 @@ const TypingText: React.FC<{ text: string; speed?: number }> = ({ text, speed = 
 };
 
 const AIPlanner: React.FC<AIPlannerProps> = ({ user, onNavigate, onSignInClick }) => {
+  const [searchParams] = useSearchParams();
+  const [isShareOpen, setIsShareOpen] = useState(false);
   const [destination, setDestination] = useState('');
   const [days, setDays] = useState(3);
   const [budget, setBudget] = useState('Moderate');
@@ -60,8 +64,14 @@ const AIPlanner: React.FC<AIPlannerProps> = ({ user, onNavigate, onSignInClick }
     }
   }, [notification]);
 
-  const handlePlan = async () => {
-    if (!destination.trim()) {
+  const handlePlan = async (
+    customDest = destination,
+    customDays = days,
+    customBudget = budget,
+    customVibe = vibe
+  ) => {
+    const destToUse = customDest.trim();
+    if (!destToUse) {
       setNotification('Please enter a destination');
       return;
     }
@@ -71,7 +81,7 @@ const AIPlanner: React.FC<AIPlannerProps> = ({ user, onNavigate, onSignInClick }
     setIsSaved(false);
 
     try {
-      const generated = await generateTripPlan(destination, days, budget, vibe);
+      const generated = await generateTripPlan(destToUse, customDays, customBudget, customVibe);
       setPlan(generated);
       setTimeout(() => {
         resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -82,6 +92,37 @@ const AIPlanner: React.FC<AIPlannerProps> = ({ user, onNavigate, onSignInClick }
     } finally {
       setLoading(false);
     }
+  };
+
+  useEffect(() => {
+    const destParam = searchParams.get('destination');
+    const daysParam = searchParams.get('days');
+    const budgetParam = searchParams.get('budget');
+    const vibeParam = searchParams.get('vibe');
+
+    if (destParam) {
+      const parsedDays = daysParam ? Number(daysParam) : 3;
+      const parsedBudget = budgetParam || 'Moderate';
+      const parsedVibe = vibeParam || 'Culture & Food';
+
+      setDestination(destParam);
+      setDays(parsedDays);
+      setBudget(parsedBudget);
+      setVibe(parsedVibe);
+
+      handlePlan(destParam, parsedDays, parsedBudget, parsedVibe);
+    }
+  }, []);
+
+  const getShareUrl = () => {
+    if (!plan) return window.location.href;
+    const baseUrl = window.location.origin + window.location.pathname;
+    const params = new URLSearchParams();
+    params.set('destination', plan.destination);
+    params.set('days', plan.duration.toString());
+    params.set('budget', plan.budget);
+    params.set('vibe', plan.vibe || vibe);
+    return `${baseUrl}?${params.toString()}`;
   };
 
   const handleSaveTrip = () => {
@@ -402,7 +443,7 @@ const AIPlanner: React.FC<AIPlannerProps> = ({ user, onNavigate, onSignInClick }
           </div>
 
           <button 
-            onClick={handlePlan}
+            onClick={() => handlePlan()}
             disabled={loading}
             className="w-full mt-12 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold py-6 rounded-2xl transition-all shadow-[0_0_30px_rgba(79,70,229,0.3)] flex items-center justify-center space-x-3 group disabled:opacity-50 disabled:cursor-not-allowed"
           >
@@ -728,11 +769,18 @@ const AIPlanner: React.FC<AIPlannerProps> = ({ user, onNavigate, onSignInClick }
                       <Download className="w-5 h-5 mr-2" />
                       Download PDF
                     </button>
+                    <button 
+                      onClick={() => setIsShareOpen(true)}
+                      className="bg-white/5 hover:bg-white/10 text-white font-bold px-8 py-4 rounded-2xl border border-white/10 transition-all flex items-center"
+                    >
+                      <Share2 className="w-5 h-5 mr-2 text-indigo-400" />
+                      Share Plan
+                    </button>
                   </div>
                   {!isSaved && (
                     <div className="flex items-center space-x-4">
                       <button 
-                        onClick={handlePlan}
+                        onClick={() => handlePlan()}
                         className="text-gray-400 hover:text-white font-bold flex items-center space-x-2 transition-colors"
                       >
                         <RefreshCw className="w-4 h-4" />
@@ -746,6 +794,17 @@ const AIPlanner: React.FC<AIPlannerProps> = ({ user, onNavigate, onSignInClick }
           )}
         </AnimatePresence>
       </div>
+
+      {plan && (
+        <ShareModal
+          isOpen={isShareOpen}
+          onClose={() => setIsShareOpen(false)}
+          shareUrl={getShareUrl()}
+          shareTitle={`AI Travel Plan to ${plan.destination}`}
+          shareText={`Check out this custom ${plan.duration}-day travel plan to ${plan.destination} I generated using Destinix AI Trip Architect! `}
+          shareSubject={`My AI Travel Itinerary for ${plan.destination}`}
+        />
+      )}
     </div>
   );
 };

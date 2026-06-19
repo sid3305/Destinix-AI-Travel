@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Page, User } from '../types';
 
 interface NavbarProps {
@@ -32,7 +33,9 @@ const LanguageSwitcher: React.FC = () => {
 };
 
 const Navbar: React.FC<NavbarProps> = ({ currentPage, setCurrentPage, user, onSignInClick, onLogout }) => {
+  const { t } = useTranslation();
   const navigate = useNavigate();
+  const isAdmin = user && ['admin@destinix.com', 'admin@travel.com'].includes(user.email.toLowerCase());
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
@@ -125,6 +128,14 @@ const Navbar: React.FC<NavbarProps> = ({ currentPage, setCurrentPage, user, onSi
                     
                     {isUserMenuOpen && (
                       <div className="absolute right-0 mt-3 w-48 bg-gray-900 border border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-[scaleUp_0.2s_ease-out]">
+                        {isAdmin && (
+                          <button 
+                            onClick={() => handlePageChange(Page.Admin)}
+                            className="w-full text-left px-5 py-3 text-sm text-indigo-400 hover:bg-white/5 hover:text-indigo-300 transition-colors flex items-center font-bold"
+                          >
+                            <span className="mr-3">🛡️</span> Admin Panel
+                          </button>
+                        )}
                         <button 
                           onClick={() => handlePageChange(Page.Profile)}
                           className="w-full text-left px-5 py-3 text-sm text-gray-300 hover:bg-white/5 hover:text-white transition-colors flex items-center"
@@ -226,6 +237,14 @@ const Navbar: React.FC<NavbarProps> = ({ currentPage, setCurrentPage, user, onSi
                     Collaborative Trips
                   </button>
                 </>
+              )}
+              {isAdmin && (
+                <button
+                  onClick={() => handlePageChange(Page.Admin)}
+                  className={`block w-full text-left text-2xl font-serif font-bold text-indigo-400 transition-all`}
+                >
+                  🛡️ Admin Panel
+                </button>
               )}
             </div>
 
